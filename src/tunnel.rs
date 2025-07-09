@@ -60,6 +60,50 @@ impl Tunnel {
         }
     }
 
+    // Spawns a blocking task to read from Wintun and forward IPv6 packets to the async writer.
+    fn spawn_tun_reader(
+        &self,
+        read_session: Arc<Session>,
+        termination_token: Arc<RwLock<bool>>,
+        packet_tx: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::task::spawn_blocking(move || {
+            loop {
+                // Check for termination
+                if *(termination_token.read().unwrap()) {
+                    break;
+                }
+                let mut packet = read_session.receive_blocking().unwrap();
+
+                let bytes = packet.bytes_mut();
+                let ip_version = (bytes[0] >> 4) & 0x0f;
+                // Only forward IPv6 packets
+                if ip_version == 6 {
+                    if packet_tx.send(bytes.to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    }
+
+    // Spawns an async task to receive bytes and write to the network writer.
+    fn spawn_writer_task(
+        &self,
+        mut writer: WriteHalf<TlsStream<TcpStream>>,
+        termination_token: Arc<RwLock<bool>>,
+        mut packet_rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            while let Some(bytes) = packet_rx.recv().await {
+                if *(termination_token.read().unwrap()) {
+                    break;
+                }
+                writer.write_all(&bytes).await.unwrap();
+            }
+        })
+    }
+
     pub async fn on(
         &mut self,
         mut reader: ReadHalf<TlsStream<TcpStream>>,
@@ -67,60 +111,21 @@ impl Tunnel {
     ) -> (
         tokio::task::JoinHandle<()>,
         tokio::task::JoinHandle<()>,
-        UnboundedReceiver<String>,
+        tokio::task::JoinHandle<()>,
     ) {
-        let mut guard = self.termination_token.write().unwrap();
-        *guard = false;
+        // Reset termination token
+        *self.termination_token.write().unwrap() = false;
 
         let read_session = Arc::clone(&self.wintun);
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        let tx2 = tx.clone();
 
-        // Channel for passing packets from blocking to async writer
-        let (packet_tx, mut packet_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
-        let tt1 = self.termination_token.clone();
-        let tx_blocking = tx.clone();
-        // Blocking task: read from wintun, send to async writer
-        let tun_read_handle = tokio::task::spawn_blocking(move || {
-            loop {
-                if *(tt1.read().unwrap()) {
-                    break;
-                }
-                match read_session.receive_blocking() {
-                    Ok(mut packet) => {
-                        let bytes = packet.bytes_mut();
-                        let ip_version = (bytes[0] >> 4) & 0x0f;
-                        if ip_version == 6 {
-                            // Send bytes to async writer
-                            if packet_tx.send(bytes.to_vec()).is_err() {
-                                break;
-                            }
-                        }
-                    }
-                    Err(_error) => {
-                        let _ = tx_blocking.send("Reader session error".to_string());
-                        break;
-                    }
-                }
-            }
-        });
+        let (packet_tx, packet_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
 
-        // Async task: receive bytes and write to writer
-        let tt1_writer = self.termination_token.clone();
-        let tx_writer = tx.clone();
-        let writer_handle = tokio::spawn(async move {
-            while let Some(bytes) = packet_rx.recv().await {
-                if *(tt1_writer.read().unwrap()) {
-                    break;
-                }
-                if let Err(_error) = writer.write_all(&bytes).await {
-                    let _ = tx_writer.send("Writer error".to_string());
-                    let mut termination_token = tt1_writer.write().unwrap();
-                    *termination_token = true;
-                    break;
-                }
-            }
-        });
+        // Spawn tasks
+        let tun_read_handle =
+            self.spawn_tun_reader(read_session, self.termination_token.clone(), packet_tx);
+
+        let writer_handle =
+            self.spawn_writer_task(writer, self.termination_token.clone(), packet_rx);
 
         let tt2 = self.termination_token.clone();
 
@@ -135,33 +140,11 @@ impl Tunnel {
                 let mut is_error = false;
                 tokio::select! {
                 _ = async {
-                 match reader.read_exact(&mut ipv6_header).await {
-                    Ok(_) => {
-
-                    },
-                    Err(error) => {
-                        tx2.send("Reader error".to_string());
-                        is_error = true;
-                        let mut termination_token = tt2.write().unwrap();
-                                        *termination_token = true;
-                        return ;
-                    }
-                 }
+                 reader.read_exact(&mut ipv6_header).await.unwrap();
                 let ipv6_length = u16::from_be_bytes([ipv6_header[4], ipv6_header[5]]) as usize;
 
                 let mut ipv6_body = vec![0u8; ipv6_length];
-                match reader.read_exact(&mut ipv6_body).await {
-                    Ok(_) => {
-
-                    },
-                    Err(error) => {
-                        tx2.send("Reader error".to_string());
-                        is_error = true;
-                        let mut termination_token = tt2.write().unwrap();
-                                        *termination_token = true;
-                        return
-                    }
-                }
+                reader.read_exact(&mut ipv6_body).await.unwrap();
 
                 let full_packet = [&ipv6_header[..], &ipv6_body[..]].concat();
 
@@ -179,13 +162,10 @@ impl Tunnel {
                 }
                 }
                         }
-                if (is_error) {
-                    break;
-                }
             }
         });
 
-        (tun_read_handle, sock_read_handle, rx)
+        (sock_read_handle, tun_read_handle, writer_handle)
     }
 
     pub fn terminate(&mut self) {

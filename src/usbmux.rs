@@ -370,7 +370,6 @@ impl UsbMuxClient {
     }
 
     pub async fn conncet_to_cdp(&mut self) -> Result<(), UsbmuxOperationError> {
-        println!("Executed$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
         let msg = LockdownMessage {
             Label: Some("client".to_string()),
             Request: Some("StartService".to_string()),

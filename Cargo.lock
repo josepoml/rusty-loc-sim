@@ -619,8 +619,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustymobiledevice"
-version = "0.1.0"
+name = "rusty-loc-sim"
+version = "1.0.0"
 dependencies = [
  "byteorder",
  "hex",

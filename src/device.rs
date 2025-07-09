@@ -30,7 +30,14 @@ impl Device {
     pub async fn connect(
         &mut self,
         wintun_path: PathBuf,
-    ) -> Result<UnboundedReceiver<String>, DeviceError> {
+    ) -> Result<
+        (
+            tokio::task::JoinHandle<()>,
+            tokio::task::JoinHandle<()>,
+            tokio::task::JoinHandle<()>,
+        ),
+        DeviceError,
+    > {
         let mut usbmux_client = UsbMuxClient::new().await?;
         usbmux_client.get_device_pair_record().await?;
         usbmux_client.connect_to_lockdown().await?;
@@ -51,13 +58,13 @@ impl Device {
                 .ok_or_else(|| DeviceError::Error("No ssl sock in usbmux client"))?,
         );
 
-        let (tun_read_task, sock_read_task, rx) =
+        let (sock_read_handle, tun_read_handle, writer_handle) =
             self.tunnel.as_mut().unwrap().on(reader, writer).await;
 
-        Ok(rx)
+        Ok((sock_read_handle, tun_read_handle, writer_handle))
     }
 
-    pub async fn get_dt_service_port(&self) -> Result<u16, DeviceError> {
+    async fn get_dt_service_port(&self) -> Result<u16, DeviceError> {
         let (addr, port) = (
             self.device_addr
                 .as_ref()
@@ -102,17 +109,13 @@ impl Device {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use tokio;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio;
 
-//     #[tokio::test]
-//     async fn test_amfi() {
-//         let mut usbmux_client = UsbMuxClient::new().await.unwrap();
-//         usbmux_client.get_device_pair_record().await.unwrap();
-//         usbmux_client.connect_to_lockdown().await.unwrap();
-//         usbmux_client.start_lockdown_session().await.unwrap();
-//         usbmux_client.connect_to_amfi().await.unwrap();
-//     }
-// }
+    #[tokio::test]
+    async fn test_device() {
+        let mut device = Device::new();
+    }
+}

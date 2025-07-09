@@ -1,6 +1,6 @@
 [package]
-name = "rustymobiledevice"
-version = "0.1.0"
+name = "rusty-loc-sim"
+version = "1.0.0"
 edition = "2021"
 
 [features]
@@ -10,9 +10,6 @@ debug_errors = []
 
 byteorder = "1.5.0"
 hex = "0.4.3"
-
-
-  
 plist = "1.7.0"
 pretty-hex = "0.4.1"
 rustls = "0.23.25"
@@ -23,7 +20,5 @@ thiserror = "2.0.12"
 log = "0.4"
 tokio = { version = "1.43.0", features = ["full"] }
 tokio-rustls = "0.26.2"
-
-
 util_macro ={ path = "../phantom-trail-app/phantom-trail/util_macro"}
 wintun = "0.5.1"
