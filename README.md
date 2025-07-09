@@ -108,16 +108,7 @@ This project is licensed under the GNU GPLv3 License. See the [LICENSE](LICENSE)
 - 🐛 [Bug Reports](https://github.com/yourusername/rusty-loc-sim/issues)
 - 💬 [Discussions](https://github.com/yourusername/rusty-loc-sim/discussions)
 
-## Changelog
 
-### [Unreleased]
-
-### [1.0.0] - 2025-01-01
-
-- Initial release
-- Basic location simulation functionality
-- Windows support
-- CLI interface
 
 ## Acknowledgments
 
