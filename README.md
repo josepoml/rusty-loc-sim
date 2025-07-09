@@ -23,7 +23,7 @@ A command-line tool for simulating iOS device location on Windows systems.
 
 ### Download
 
-Download the latest release from the [Releases](https://github.com/yourusername/rusty-loc-sim/releases) page.
+Download the latest release from the [Releases](https://github.com/josepoml/rusty-loc-sim/releases) page.
 
 ### Build from Source
 
@@ -105,8 +105,8 @@ This project is licensed under the GNU GPLv3 License. See the [LICENSE](LICENSE)
 
 ## Support
 
-- 🐛 [Bug Reports](https://github.com/yourusername/rusty-loc-sim/issues)
-- 💬 [Discussions](https://github.com/yourusername/rusty-loc-sim/discussions)
+- 🐛 [Bug Reports](https://github.com/josepoml/rusty-loc-sim/issues)
+- 💬 [Discussions](https://github.com/josepoml/rusty-loc-sim/discussions)
 
 
 
